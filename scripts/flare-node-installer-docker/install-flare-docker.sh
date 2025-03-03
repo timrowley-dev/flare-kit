@@ -7,11 +7,18 @@ cChainConfig='{
   "eth-apis": [
     "eth",
     "eth-filter",
+    "admin",
+    "debug",
     "net",
+    "debug-tracer",
     "web3",
     "internal-eth",
     "internal-blockchain",
-    "internal-transaction"
+    "internal-transaction",
+    "internal-tx-pool",
+    "internal-debug",
+    "internal-account",
+    "internal-personal"
   ],
   "rpc-gas-cap": 50000000,
   "rpc-tx-fee-cap": 100,
@@ -97,16 +104,16 @@ install_jq () {
 get_bootstrap_endpoint () {
     case "$networkParam" in
         flare)
-            echo "https://flare.flare.network/ext/info"
+            echo "https://flare-bootstrap.flare.network/ext/info"
             ;;
         coston)
-            echo "https://coston.flare.network/ext/info"
+            echo "https://coston-bootstrap.flare.network/ext/info"
             ;;
         coston2)
-            echo "https://coston2.flare.network/ext/info"
+            echo "https://coston2-bootstrap.flare.network/ext/info"
             ;;
         songbird)
-            echo "https://songbird.flare.network/ext/info"
+            echo "https://songbird-bootstrap.flare.network/ext/info"
             ;;
         *)
             echo "Unknown network: $networkParam"
@@ -316,8 +323,7 @@ networkParam=""
 isValidatorParam="false"
 
 # Example commands
-# --network flare --version go-flare:v1.7.1807 --http-host 0.0.0.0 --db-dir /mnt/disks/db --install
-# --network songbird --version go-flare:v0.6.6-songbird --http-host 0.0.0.0 --db-dir /mnt/disks/db --install
+# --network flare --version go-flare:v1.9.1 --http-host 0.0.0.0 --db-dir /mnt/disks/db --install
 
 while [[ $# -gt 0 ]]; do
    key="$1"
