@@ -34,7 +34,7 @@
 #   ./install-flare-docker.sh --network flare --version go-flare:v1.9.2 --upgrade
 #
 #   # Test upgrade plan without executing
-#   ./install-flare-docker.sh --network flare --version go-flare:v1.9.2 --upgrade --dry-run
+#   ./install-flare-docker.sh --network flare --version go-flare:v1.9.2 --dry-run --upgrade 
 #
 #   # Check node status
 #   ./install-flare-docker.sh --status
@@ -45,7 +45,7 @@
 # - Docker will be installed if not present
 # - The node will be configured to restart automatically on system reboot
 # - When upgrading, the script will preserve existing configurations and gracefully stop/start the container
-# - Use --dry-run with --upgrade to see the planned changes without executing them
+# - Use --dry-run with --upgrade to see the planned changes without executing them [IMPORTANT: MUST BE SPECIFIED *BEFORE* --upgrade flag]
 
 # Error handling
 set -euo pipefail
