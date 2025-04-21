@@ -454,7 +454,7 @@ upgrade_node() {
         exit 1
     fi
 
-    # Get the existing container's configuration BEFORE stopping/removing it
+    # Get the existing container's configuration
     echo "Retrieving existing container configuration..."
     old_container_id=$(docker ps -a -q -f name="${container_name}")
     if [ -z "$old_container_id" ]; then
@@ -464,26 +464,6 @@ upgrade_node() {
 
     # Get current version for comparison
     current_container_version=$(docker inspect --format '{{.Config.Image}}' "${old_container_id}")
-    if [ "$current_container_version" == "flarefoundation/${nodeTagParam}" ]; then
-        if [ "$dryRunParam" == "true" ]; then
-            echo "Note: Container is already running version ${nodeTagParam}"
-        else
-            echo "Warning: Container is already running version ${nodeTagParam}"
-            read -p "Do you want to continue anyway? (y/n) " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "Upgrade cancelled"
-                exit 0
-            fi
-        fi
-    fi
-
-    # Check if new version exists and is accessible
-    echo "Validating new version ${nodeTagParam}..."
-    if ! docker pull flarefoundation/"${nodeTagParam}" > /dev/null 2>&1; then
-        echo "Error: Version ${nodeTagParam} is not available or invalid"
-        exit 1
-    fi
 
     # Get container configuration in JSON format
     container_config=$(docker inspect "${old_container_id}")
@@ -520,6 +500,13 @@ upgrade_node() {
     # Add port mappings and image
     docker_cmd+=" -p ${httpHostParam}:9650:9650 -p ${httpHostParam}:9651:9651 flarefoundation/${nodeTagParam}"
 
+    # Validate version exists (for both dry-run and actual upgrade)
+    echo "Validating new version ${nodeTagParam}..."
+    if ! docker manifest inspect flarefoundation/"${nodeTagParam}" > /dev/null 2>&1; then
+        echo "Error: Version ${nodeTagParam} is not available or invalid"
+        exit 1
+    fi
+
     if [ "$dryRunParam" == "true" ]; then
         echo "=== DRY RUN - No changes will be made ==="
         echo "Current container: ${container_name}"
@@ -537,6 +524,16 @@ upgrade_node() {
         echo ""
         echo "=== End of dry run ==="
         exit 0
+    fi
+
+    if [ "$current_container_version" == "flarefoundation/${nodeTagParam}" ]; then
+        echo "Warning: Container is already running version ${nodeTagParam}"
+        read -p "Do you want to continue anyway? (y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Upgrade cancelled"
+            exit 0
+        fi
     fi
 
     # Check if container is running
