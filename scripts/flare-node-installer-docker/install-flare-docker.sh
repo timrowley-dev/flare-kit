@@ -441,27 +441,6 @@ upgrade_node() {
         exit 1
     fi
 
-    # Check if new version exists and is accessible
-    echo "Validating new version ${nodeTagParam}..."
-    if ! docker pull flarefoundation/"${nodeTagParam}" > /dev/null 2>&1; then
-        echo "Error: Version ${nodeTagParam} is not available or invalid"
-        exit 1
-    fi
-
-    # Get current version for comparison
-    current_image=$(docker images --format "{{.Repository}}:{{.Tag}}" flarefoundation/* | grep "^flarefoundation/${nodeTagParam%%:*}")
-    if [ -n "$current_image" ]; then
-        echo "Warning: You are already running version ${nodeTagParam}"
-        if [ "$dryRunParam" != "true" ]; then
-            read -p "Do you want to continue anyway? (y/n) " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "Upgrade cancelled"
-                exit 0
-            fi
-        fi
-    fi
-
     # Determine container name based on network and type
     if [[ "$isValidatorParam" == "true" ]]; then
         container_name="${networkParam}-validator"
@@ -480,6 +459,29 @@ upgrade_node() {
     old_container_id=$(docker ps -a -q -f name="${container_name}")
     if [ -z "$old_container_id" ]; then
         echo "Error: Could not find old container configuration"
+        exit 1
+    fi
+
+    # Get current version for comparison
+    current_container_version=$(docker inspect --format '{{.Config.Image}}' "${old_container_id}")
+    if [ "$current_container_version" == "flarefoundation/${nodeTagParam}" ]; then
+        if [ "$dryRunParam" == "true" ]; then
+            echo "Note: Container is already running version ${nodeTagParam}"
+        else
+            echo "Warning: Container is already running version ${nodeTagParam}"
+            read -p "Do you want to continue anyway? (y/n) " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "Upgrade cancelled"
+                exit 0
+            fi
+        fi
+    fi
+
+    # Check if new version exists and is accessible
+    echo "Validating new version ${nodeTagParam}..."
+    if ! docker pull flarefoundation/"${nodeTagParam}" > /dev/null 2>&1; then
+        echo "Error: Version ${nodeTagParam} is not available or invalid"
         exit 1
     fi
 
@@ -521,7 +523,7 @@ upgrade_node() {
     if [ "$dryRunParam" == "true" ]; then
         echo "=== DRY RUN - No changes will be made ==="
         echo "Current container: ${container_name}"
-        echo "Current version: $(docker inspect --format '{{.Config.Image}}' "${old_container_id}")"
+        echo "Current version: ${current_container_version}"
         echo "New version: ${nodeTagParam}"
         echo ""
         echo "Environment variables to be preserved:"
