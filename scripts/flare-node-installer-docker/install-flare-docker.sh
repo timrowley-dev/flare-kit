@@ -398,6 +398,19 @@ validate_variables () {
             ;;
     esac
 
+    # Create DB directory if it doesn't exist
+    if [ ! -d "$dbDirParam" ]; then
+        echo "Creating DB directory: $dbDirParam"
+        sudo mkdir -p "$dbDirParam"
+    fi
+
+    # Get current user
+    CURRENT_USER=$(whoami)
+
+    # Set ownership and permissions for DB directory
+    sudo chown -R "${CURRENT_USER}:docker" "$dbDirParam"
+    sudo chmod -R g+rwX "$dbDirParam"
+
     # Validate directory permissions
     if [ ! -w "$dbDirParam" ]; then
         echo "Error: DB directory is not writable: $dbDirParam"
