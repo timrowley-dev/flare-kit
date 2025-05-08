@@ -404,19 +404,6 @@ validate_variables () {
         sudo mkdir -p "$dbDirParam"
     fi
 
-    # Get current user
-    CURRENT_USER=$(whoami)
-
-    # Set ownership and permissions for DB directory
-    sudo chown -R "${CURRENT_USER}:docker" "$dbDirParam"
-    sudo chmod -R g+rwX "$dbDirParam"
-
-    # Validate directory permissions
-    if [ ! -w "$dbDirParam" ]; then
-        echo "Error: DB directory is not writable: $dbDirParam"
-        exit 1
-    fi
-
     if [[ "$isValidatorParam" == "true" ]]; then
         if [ ! -d /opt/flare/staking ]; then
             sudo mkdir -p /opt/flare/staking
@@ -429,6 +416,21 @@ validate_variables () {
             exit 1
         fi
     fi
+}
+
+setup_permissions() {
+    # Get current user
+    CURRENT_USER=$(whoami)
+    
+    echo "Setting up permissions for directories..."
+    
+    # Set ownership and permissions for DB directory
+    sudo chown -R "${CURRENT_USER}:docker" "$dbDirParam"
+    sudo chmod -R g+rwX "$dbDirParam"
+    
+    # Set ownership and permissions for flare directories
+    sudo chown -R "${CURRENT_USER}:docker" /opt/flare
+    sudo chmod -R g+rwX /opt/flare
 }
 
 install () {
@@ -461,6 +463,9 @@ install () {
        echo "Error: Docker installation failed"
        exit 1
    fi
+
+   # Setup permissions after Docker is installed
+   setup_permissions
 
    install_node
 }
