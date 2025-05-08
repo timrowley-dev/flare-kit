@@ -216,7 +216,10 @@ install_docker () {
             gnupg \
             software-properties-common
 
-        # Add Docker's official GPG key
+        # Remove existing Docker GPG key if it exists
+        sudo rm -f /usr/share/keyrings/docker-archive-keyring.gpg
+
+        # Add Docker's official GPG key (non-interactive)
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 
         # Add the Docker repository
@@ -227,8 +230,8 @@ install_docker () {
         # Update the package index again
         sudo apt-get update
 
-        # Install the latest version of Docker
-        sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+        # Install the latest version of Docker (non-interactive)
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io
 
         # Create docker group if it doesn't exist
         if ! getent group docker >/dev/null; then
