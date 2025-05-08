@@ -316,7 +316,7 @@ install_node () {
       -v /opt/flare/logs:/app/logs \
       -p "$httpHostParam":9650:9650 \
       -p "$httpHostParam":9651:9651 \
-      flarefoundation/"$nodeTagParam"
+      "flarefoundation/$nodeTagParam"
    else
       # For validators, combine staking args with any extra args
       staking_args="--staking-tls-cert-file=/app/staking/staker.crt --staking-tls-key-file=/app/staking/staker.key"
@@ -338,7 +338,7 @@ install_node () {
       -v /opt/flare/staking:/app/staking \
       -p "$httpHostParam":9650:9650 \
       -p "$httpHostParam":9651:9651 \
-      flarefoundation/"$nodeTagParam"
+      "flarefoundation/$nodeTagParam"
    fi
    # Run docker container
    
