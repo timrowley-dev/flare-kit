@@ -244,13 +244,39 @@ install_docker () {
         # Check if installation was successful
         if [ $? -eq 0 ]; then
             echo "Docker has been successfully installed."
-            echo "Please log out and back in for group changes to take effect."
+            # Start docker service
+            sudo systemctl start docker
+            # Add current user to docker group for this session
+            newgrp docker << EONG
+            # Continue with the rest of the script
+            return 0
+EONG
         else
             echo "Error: Installation of Docker failed."
             exit 1
         fi
     else
+        # If Docker is already installed, ensure user is in docker group
+        if ! groups | grep -q docker; then
+            sudo usermod -aG docker "$USER"
+            # Add current user to docker group for this session
+            newgrp docker << EONG
+            # Continue with the rest of the script
+            return 0
+EONG
+        fi
         echo "Docker is already installed."
+    fi
+}
+
+# Function to check if user has docker access
+check_docker_access() {
+    if ! docker info >/dev/null 2>&1; then
+        echo "Adding user to docker group for this session..."
+        newgrp docker << EONG
+        # Continue with the rest of the script
+        return 0
+EONG
     fi
 }
 
@@ -459,6 +485,7 @@ install () {
 
    install_jq
    install_docker
+   check_docker_access
 
    # Check if Docker was successfully installed
    if ! command -v docker &> /dev/null; then
