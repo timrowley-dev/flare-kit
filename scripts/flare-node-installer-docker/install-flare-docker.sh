@@ -371,7 +371,6 @@ create_directories () {
 validate_variables () {
     # Check required commands
     check_command curl || exit 1
-    check_command docker || exit 1
     check_command jq || exit 1
 
     if [ -z "$networkParam" ]; then
@@ -420,7 +419,6 @@ validate_variables () {
 }
 
 install () {
-
    validate_variables
 
    if [[ "$pruningEnabledParam" == "false" ]]; then
@@ -444,6 +442,13 @@ install () {
 
    install_jq
    install_docker
+
+   # Check if Docker was successfully installed
+   if ! command -v docker &> /dev/null; then
+       echo "Error: Docker installation failed"
+       exit 1
+   fi
+
    install_node
 }
 
