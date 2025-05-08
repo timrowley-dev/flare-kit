@@ -22,6 +22,7 @@
 #   --upgrade               Upgrade the node to a new version
 #   --dry-run              Show upgrade plan without executing (use with --upgrade)
 #   --status                Check node health status
+#   --extra-args <args>     Additional arguments to pass to the node
 #
 # Examples:
 #   # Install a Flare observer node
@@ -277,7 +278,6 @@ install_node () {
    fi
 
    # Write cChainConfig to file
-
    echo "$config" | sudo tee /opt/flare/conf/config.json > /dev/null
 
    # Get bootstrap endpoint
@@ -286,6 +286,11 @@ install_node () {
    # Pull docker image 
    docker pull flarefoundation/"$nodeTagParam"
 
+   # Build extra arguments string
+   extra_args=""
+   if [[ -n "$extraArgsParam" ]]; then
+      extra_args="-e EXTRA_ARGUMENTS=\"$extraArgsParam\""
+   fi
 
    if [[ "$isValidatorParam" == "false" ]]; then
       docker run -d --name "$networkParam"-observer \
@@ -295,6 +300,7 @@ install_node () {
       -e AUTOCONFIGURE_PUBLIC_IP="1" \
       -e AUTOCONFIGURE_BOOTSTRAP_ENDPOINT="$bootstrap_endpoint" \
       -e HTTP_HOST="$httpHostParam" \
+      $extra_args \
       -v "$dbDirParam":/app/db \
       -v /opt/flare/conf:/app/conf/C \
       -v /opt/flare/logs:/app/logs \
@@ -302,6 +308,12 @@ install_node () {
       -p "$httpHostParam":9651:9651 \
       flarefoundation/"$nodeTagParam"
    else
+      # For validators, combine staking args with any extra args
+      staking_args="--staking-tls-cert-file=/app/staking/staker.crt --staking-tls-key-file=/app/staking/staker.key"
+      if [[ -n "$extraArgsParam" ]]; then
+         staking_args="${staking_args} ${extraArgsParam}"
+      fi
+      
       docker run -d --name "$networkParam"-validator \
       --restart always \
       -e AUTOCONFIGURE_BOOTSTRAP="1" \
@@ -309,7 +321,7 @@ install_node () {
       -e AUTOCONFIGURE_PUBLIC_IP="1" \
       -e AUTOCONFIGURE_BOOTSTRAP_ENDPOINT="$bootstrap_endpoint" \
       -e HTTP_HOST="$httpHostParam" \
-      -e EXTRA_ARGUMENTS="--staking-tls-cert-file=/app/staking/staker.crt --staking-tls-key-file=/app/staking/staker.key" \
+      -e EXTRA_ARGUMENTS="$staking_args" \
       -v "$dbDirParam":/app/db \
       -v /opt/flare/conf:/app/conf/C \
       -v /opt/flare/logs:/app/logs \
@@ -417,6 +429,7 @@ install () {
    echo "Node Version: $nodeTagParam"
    echo "Pruning Enabled: $pruningEnabledParam" 
    echo "Is Validator: $isValidatorParam" 
+   echo "Extra Arguments: $extraArgsParam"
    printf "\n"
    echo "Starting installation in 3 seconds..."
    
@@ -565,9 +578,11 @@ dbDirParam=""
 networkParam=""
 isValidatorParam="false"
 dryRunParam="false"
+extraArgsParam=""
 
 # Example commands
 # --network flare --version go-flare:v1.9.1 --http-host 0.0.0.0 --db-dir /mnt/disks/db --install
+# --network flare --version go-flare:v1.9.1 --http-host 0.0.0.0 --db-dir /mnt/disks/db --extra-args "--some-arg=value" --install
 
 while [[ $# -gt 0 ]]; do
    key="$1"
@@ -599,6 +614,11 @@ while [[ $# -gt 0 ]]; do
       --validator)             # VARIABLE
          isValidatorParam="true"
          shift 
+         ;;
+      --extra-args)           # VARIABLE
+         extraArgsParam="$2"
+         shift
+         shift
          ;;
       --dry-run)             # VARIABLE
          dryRunParam="true"
