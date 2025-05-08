@@ -220,7 +220,7 @@ install_docker () {
         sudo rm -f /usr/share/keyrings/docker-archive-keyring.gpg
 
         # Add Docker's official GPG key (non-interactive)
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 
         # Add the Docker repository
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
