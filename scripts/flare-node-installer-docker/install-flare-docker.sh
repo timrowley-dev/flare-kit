@@ -296,27 +296,32 @@ install_node () {
    # Pull docker image 
    docker pull flarefoundation/"$nodeTagParam"
 
-   # Build extra arguments string
-   extra_args=""
-   if [[ -n "$extraArgsParam" ]]; then
-      extra_args="-e EXTRA_ARGUMENTS=\"$extraArgsParam\""
-   fi
-
    if [[ "$isValidatorParam" == "false" ]]; then
-      docker run -d --name "$networkParam"-observer \
+      # Build the docker run command
+      docker_cmd="docker run -d --name ${networkParam}-observer \
       --restart always \
-      -e AUTOCONFIGURE_BOOTSTRAP="1" \
-      -e NETWORK_ID="$networkParam" \
-      -e AUTOCONFIGURE_PUBLIC_IP="1" \
-      -e AUTOCONFIGURE_BOOTSTRAP_ENDPOINT="$bootstrap_endpoint" \
-      -e HTTP_HOST="$httpHostParam" \
-      $extra_args \
-      -v "$dbDirParam":/app/db \
+      -e AUTOCONFIGURE_BOOTSTRAP=1 \
+      -e NETWORK_ID=${networkParam} \
+      -e AUTOCONFIGURE_PUBLIC_IP=1 \
+      -e AUTOCONFIGURE_BOOTSTRAP_ENDPOINT=${bootstrap_endpoint} \
+      -e HTTP_HOST=${httpHostParam}"
+
+      # Add extra arguments if provided
+      if [[ -n "$extraArgsParam" ]]; then
+         docker_cmd="${docker_cmd} -e EXTRA_ARGUMENTS=\"${extraArgsParam}\""
+      fi
+
+      # Add volume mounts and ports
+      docker_cmd="${docker_cmd} \
+      -v ${dbDirParam}:/app/db \
       -v /opt/flare/conf:/app/conf/C \
       -v /opt/flare/logs:/app/logs \
-      -p "$httpHostParam":9650:9650 \
-      -p "$httpHostParam":9651:9651 \
-      "flarefoundation/$nodeTagParam"
+      -p ${httpHostParam}:9650:9650 \
+      -p ${httpHostParam}:9651:9651 \
+      flarefoundation/${nodeTagParam}"
+
+      echo "Running command: $docker_cmd"
+      eval "$docker_cmd"
    else
       # For validators, combine staking args with any extra args
       staking_args="--staking-tls-cert-file=/app/staking/staker.crt --staking-tls-key-file=/app/staking/staker.key"
@@ -324,21 +329,25 @@ install_node () {
          staking_args="${staking_args} ${extraArgsParam}"
       fi
       
-      docker run -d --name "$networkParam"-validator \
+      # Build the docker run command
+      docker_cmd="docker run -d --name ${networkParam}-validator \
       --restart always \
-      -e AUTOCONFIGURE_BOOTSTRAP="1" \
-      -e NETWORK_ID="$networkParam" \
-      -e AUTOCONFIGURE_PUBLIC_IP="1" \
-      -e AUTOCONFIGURE_BOOTSTRAP_ENDPOINT="$bootstrap_endpoint" \
-      -e HTTP_HOST="$httpHostParam" \
-      -e EXTRA_ARGUMENTS="$staking_args" \
-      -v "$dbDirParam":/app/db \
+      -e AUTOCONFIGURE_BOOTSTRAP=1 \
+      -e NETWORK_ID=${networkParam} \
+      -e AUTOCONFIGURE_PUBLIC_IP=1 \
+      -e AUTOCONFIGURE_BOOTSTRAP_ENDPOINT=${bootstrap_endpoint} \
+      -e HTTP_HOST=${httpHostParam} \
+      -e EXTRA_ARGUMENTS=\"${staking_args}\" \
+      -v ${dbDirParam}:/app/db \
       -v /opt/flare/conf:/app/conf/C \
       -v /opt/flare/logs:/app/logs \
       -v /opt/flare/staking:/app/staking \
-      -p "$httpHostParam":9650:9650 \
-      -p "$httpHostParam":9651:9651 \
-      "flarefoundation/$nodeTagParam"
+      -p ${httpHostParam}:9650:9650 \
+      -p ${httpHostParam}:9651:9651 \
+      flarefoundation/${nodeTagParam}"
+
+      echo "Running command: $docker_cmd"
+      eval "$docker_cmd"
    fi
    # Run docker container
    
