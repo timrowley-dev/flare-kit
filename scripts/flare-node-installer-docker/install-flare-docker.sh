@@ -358,7 +358,14 @@ create_directories () {
         sudo mkdir -p /opt/flare/logs
     fi
 
-    sudo chown -R ubuntu:ubuntu /opt/flare
+    # Get current user
+    CURRENT_USER=$(whoami)
+
+    # Set ownership to current user and docker group
+    sudo chown -R "${CURRENT_USER}:docker" /opt/flare
+
+    # Set directory permissions to allow group access
+    sudo chmod -R g+rwX /opt/flare
 }
 
 validate_variables () {
