@@ -419,6 +419,13 @@ setup_permissions() {
     
     echo "Setting up permissions for directories..."
     
+    # Create necessary directories
+    sudo mkdir -p /opt/flare/conf
+    sudo mkdir -p /opt/flare/logs
+    if [[ "$isValidatorParam" == "true" ]]; then
+        sudo mkdir -p /opt/flare/staking
+    fi
+    
     # Set ownership and permissions for DB directory
     sudo chown -R "${CURRENT_USER}:docker" "$dbDirParam"
     sudo chmod -R g+rwX "$dbDirParam"
