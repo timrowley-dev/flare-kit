@@ -246,11 +246,8 @@ install_docker () {
             echo "Docker has been successfully installed."
             # Start docker service
             sudo systemctl start docker
-            # Add current user to docker group for this session
-            newgrp docker << EONG
-            # Continue with the rest of the script
-            return 0
-EONG
+            # Set permissions on docker socket
+            sudo chmod 666 /var/run/docker.sock
         else
             echo "Error: Installation of Docker failed."
             exit 1
@@ -259,11 +256,6 @@ EONG
         # If Docker is already installed, ensure user is in docker group
         if ! groups | grep -q docker; then
             sudo usermod -aG docker "$USER"
-            # Add current user to docker group for this session
-            newgrp docker << EONG
-            # Continue with the rest of the script
-            return 0
-EONG
         fi
         echo "Docker is already installed."
     fi
@@ -272,11 +264,8 @@ EONG
 # Function to check if user has docker access
 check_docker_access() {
     if ! docker info >/dev/null 2>&1; then
-        echo "Adding user to docker group for this session..."
-        newgrp docker << EONG
-        # Continue with the rest of the script
-        return 0
-EONG
+        echo "Setting permissions on docker socket..."
+        sudo chmod 666 /var/run/docker.sock
     fi
 }
 
