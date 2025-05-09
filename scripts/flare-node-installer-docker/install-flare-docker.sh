@@ -122,6 +122,7 @@ cChainConfig_validator='
   "rpc-tx-fee-cap": 100,
   "preimages-enabled": false,
   "pruning-enabled": true,
+  "state-sync-enabled": true,
   "snapshot-async": true,
   "snapshot-verification-enabled": false,
   "metrics-enabled": true,
@@ -281,8 +282,13 @@ install_node () {
 
    if [[ "$isValidatorParam" == "false" ]]; then
       config="$cChainConfig"
-      # TODO: Validate this sets pruning to false when --archival is used
+      # Set pruning-enabled based on pruningEnabledParam
       config=$(echo "$config" | jq --arg pruningEnabled "$pruningEnabledParam" '.["pruning-enabled"] = ($pruningEnabled == "true")')
+      
+      # If archival mode (pruning disabled), also disable state sync
+      if [[ "$pruningEnabledParam" == "false" ]]; then
+         config=$(echo "$config" | jq '.["state-sync-enabled"] = false')
+      fi
    else
       config="$cChainConfig_validator"
    fi
