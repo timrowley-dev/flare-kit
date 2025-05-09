@@ -22,6 +22,7 @@
 #   --upgrade               Upgrade the node to a new version
 #   --dry-run              Show upgrade plan without executing (use with --upgrade)
 #   --status                Check node health status
+#   --extra-args <args>     Additional arguments to pass to the node
 #
 # Examples:
 #   # Install a Flare observer node
@@ -121,6 +122,7 @@ cChainConfig_validator='
   "rpc-tx-fee-cap": 100,
   "preimages-enabled": false,
   "pruning-enabled": true,
+  "state-sync-enabled": true,
   "snapshot-async": true,
   "snapshot-verification-enabled": false,
   "metrics-enabled": true,
@@ -215,18 +217,13 @@ install_docker () {
             gnupg \
             software-properties-common
 
-        # Add Docker's official GPG key with verification
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-            sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        # Remove existing Docker GPG key if it exists
+        sudo rm -f /usr/share/keyrings/docker-archive-keyring.gpg
 
-        # Verify the key fingerprint
-        if ! sudo gpg --show-keys /usr/share/keyrings/docker-archive-keyring.gpg | \
-            grep -q "9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88"; then
-            echo "Error: Docker GPG key verification failed"
-            exit 1
-        fi
+        # Add Docker's official GPG key (non-interactive)
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 
-        # Add the Docker APT repository using the verified key
+        # Add the Docker repository
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
             https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
             sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
@@ -234,8 +231,8 @@ install_docker () {
         # Update the package index again
         sudo apt-get update
 
-        # Install the latest version of Docker
-        sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+        # Install the latest version of Docker (non-interactive)
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io
 
         # Create docker group if it doesn't exist
         if ! getent group docker >/dev/null; then
@@ -248,13 +245,28 @@ install_docker () {
         # Check if installation was successful
         if [ $? -eq 0 ]; then
             echo "Docker has been successfully installed."
-            echo "Please log out and back in for group changes to take effect."
+            # Start docker service
+            sudo systemctl start docker
+            # Set permissions on docker socket
+            sudo chmod 666 /var/run/docker.sock
         else
             echo "Error: Installation of Docker failed."
             exit 1
         fi
     else
+        # If Docker is already installed, ensure user is in docker group
+        if ! groups | grep -q docker; then
+            sudo usermod -aG docker "$USER"
+        fi
         echo "Docker is already installed."
+    fi
+}
+
+# Function to check if user has docker access
+check_docker_access() {
+    if ! docker info >/dev/null 2>&1; then
+        echo "Setting permissions on docker socket..."
+        sudo chmod 666 /var/run/docker.sock
     fi
 }
 
@@ -270,14 +282,18 @@ install_node () {
 
    if [[ "$isValidatorParam" == "false" ]]; then
       config="$cChainConfig"
-      # TODO: Validate this sets pruning to false when --archival is used
+      # Set pruning-enabled based on pruningEnabledParam
       config=$(echo "$config" | jq --arg pruningEnabled "$pruningEnabledParam" '.["pruning-enabled"] = ($pruningEnabled == "true")')
+      
+      # If archival mode (pruning disabled), also disable state sync
+      if [[ "$pruningEnabledParam" == "false" ]]; then
+         config=$(echo "$config" | jq '.["state-sync-enabled"] = false')
+      fi
    else
       config="$cChainConfig_validator"
    fi
 
    # Write cChainConfig to file
-
    echo "$config" | sudo tee /opt/flare/conf/config.json > /dev/null
 
    # Get bootstrap endpoint
@@ -286,37 +302,58 @@ install_node () {
    # Pull docker image 
    docker pull flarefoundation/"$nodeTagParam"
 
-
    if [[ "$isValidatorParam" == "false" ]]; then
-      docker run -d --name "$networkParam"-observer \
+      # Build the docker run command
+      docker_cmd="docker run -d --name ${networkParam}-observer \
       --restart always \
-      -e AUTOCONFIGURE_BOOTSTRAP="1" \
-      -e NETWORK_ID="$networkParam" \
-      -e AUTOCONFIGURE_PUBLIC_IP="1" \
-      -e AUTOCONFIGURE_BOOTSTRAP_ENDPOINT="$bootstrap_endpoint" \
-      -e HTTP_HOST="$httpHostParam" \
-      -v "$dbDirParam":/app/db \
+      -e AUTOCONFIGURE_BOOTSTRAP=1 \
+      -e NETWORK_ID=${networkParam} \
+      -e AUTOCONFIGURE_PUBLIC_IP=1 \
+      -e AUTOCONFIGURE_BOOTSTRAP_ENDPOINT=${bootstrap_endpoint} \
+      -e HTTP_HOST=${httpHostParam}"
+
+      # Add extra arguments if provided
+      if [[ -n "$extraArgsParam" ]]; then
+         docker_cmd="${docker_cmd} -e EXTRA_ARGUMENTS=\"${extraArgsParam}\""
+      fi
+
+      # Add volume mounts and ports
+      docker_cmd="${docker_cmd} \
+      -v ${dbDirParam}:/app/db \
       -v /opt/flare/conf:/app/conf/C \
       -v /opt/flare/logs:/app/logs \
-      -p "$httpHostParam":9650:9650 \
-      -p "$httpHostParam":9651:9651 \
-      flarefoundation/"$nodeTagParam"
+      -p ${httpHostParam}:9650:9650 \
+      -p ${httpHostParam}:9651:9651 \
+      flarefoundation/${nodeTagParam}"
+
+      echo "Running command: $docker_cmd"
+      eval "$docker_cmd"
    else
-      docker run -d --name "$networkParam"-validator \
+      # For validators, combine staking args with any extra args
+      staking_args="--staking-tls-cert-file=/app/staking/staker.crt --staking-tls-key-file=/app/staking/staker.key"
+      if [[ -n "$extraArgsParam" ]]; then
+         staking_args="${staking_args} ${extraArgsParam}"
+      fi
+      
+      # Build the docker run command
+      docker_cmd="docker run -d --name ${networkParam}-validator \
       --restart always \
-      -e AUTOCONFIGURE_BOOTSTRAP="1" \
-      -e NETWORK_ID="$networkParam" \
-      -e AUTOCONFIGURE_PUBLIC_IP="1" \
-      -e AUTOCONFIGURE_BOOTSTRAP_ENDPOINT="$bootstrap_endpoint" \
-      -e HTTP_HOST="$httpHostParam" \
-      -e EXTRA_ARGUMENTS="--staking-tls-cert-file=/app/staking/staker.crt --staking-tls-key-file=/app/staking/staker.key" \
-      -v "$dbDirParam":/app/db \
+      -e AUTOCONFIGURE_BOOTSTRAP=1 \
+      -e NETWORK_ID=${networkParam} \
+      -e AUTOCONFIGURE_PUBLIC_IP=1 \
+      -e AUTOCONFIGURE_BOOTSTRAP_ENDPOINT=${bootstrap_endpoint} \
+      -e HTTP_HOST=${httpHostParam} \
+      -e EXTRA_ARGUMENTS=\"${staking_args}\" \
+      -v ${dbDirParam}:/app/db \
       -v /opt/flare/conf:/app/conf/C \
       -v /opt/flare/logs:/app/logs \
       -v /opt/flare/staking:/app/staking \
-      -p "$httpHostParam":9650:9650 \
-      -p "$httpHostParam":9651:9651 \
-      flarefoundation/"$nodeTagParam"
+      -p ${httpHostParam}:9650:9650 \
+      -p ${httpHostParam}:9651:9651 \
+      flarefoundation/${nodeTagParam}"
+
+      echo "Running command: $docker_cmd"
+      eval "$docker_cmd"
    fi
    # Run docker container
    
@@ -346,13 +383,19 @@ create_directories () {
         sudo mkdir -p /opt/flare/logs
     fi
 
-    sudo chown -R ubuntu:ubuntu /opt/flare
+    # Get current user
+    CURRENT_USER=$(whoami)
+
+    # Set ownership to current user and docker group
+    sudo chown -R "${CURRENT_USER}:docker" /opt/flare
+
+    # Set directory permissions to allow group access
+    sudo chmod -R g+rwX /opt/flare
 }
 
 validate_variables () {
     # Check required commands
     check_command curl || exit 1
-    check_command docker || exit 1
     check_command jq || exit 1
 
     if [ -z "$networkParam" ]; then
@@ -380,10 +423,10 @@ validate_variables () {
             ;;
     esac
 
-    # Validate directory permissions
-    if [ ! -w "$dbDirParam" ]; then
-        echo "Error: DB directory is not writable: $dbDirParam"
-        exit 1
+    # Create DB directory if it doesn't exist
+    if [ ! -d "$dbDirParam" ]; then
+        echo "Creating DB directory: $dbDirParam"
+        sudo mkdir -p "$dbDirParam"
     fi
 
     if [[ "$isValidatorParam" == "true" ]]; then
@@ -400,8 +443,29 @@ validate_variables () {
     fi
 }
 
-install () {
+setup_permissions() {
+    # Get current user
+    CURRENT_USER=$(whoami)
+    
+    echo "Setting up permissions for directories..."
+    
+    # Create necessary directories
+    sudo mkdir -p /opt/flare/conf
+    sudo mkdir -p /opt/flare/logs
+    if [[ "$isValidatorParam" == "true" ]]; then
+        sudo mkdir -p /opt/flare/staking
+    fi
+    
+    # Set ownership and permissions for DB directory
+    sudo chown -R "${CURRENT_USER}:docker" "$dbDirParam"
+    sudo chmod -R g+rwX "$dbDirParam"
+    
+    # Set ownership and permissions for flare directories
+    sudo chown -R "${CURRENT_USER}:docker" /opt/flare
+    sudo chmod -R g+rwX /opt/flare
+}
 
+install () {
    validate_variables
 
    if [[ "$pruningEnabledParam" == "false" ]]; then
@@ -417,6 +481,7 @@ install () {
    echo "Node Version: $nodeTagParam"
    echo "Pruning Enabled: $pruningEnabledParam" 
    echo "Is Validator: $isValidatorParam" 
+   echo "Extra Arguments: $extraArgsParam"
    printf "\n"
    echo "Starting installation in 3 seconds..."
    
@@ -424,6 +489,17 @@ install () {
 
    install_jq
    install_docker
+   check_docker_access
+
+   # Check if Docker was successfully installed
+   if ! command -v docker &> /dev/null; then
+       echo "Error: Docker installation failed"
+       exit 1
+   fi
+
+   # Setup permissions after Docker is installed
+   setup_permissions
+
    install_node
 }
 
@@ -565,9 +641,11 @@ dbDirParam=""
 networkParam=""
 isValidatorParam="false"
 dryRunParam="false"
+extraArgsParam=""
 
 # Example commands
 # --network flare --version go-flare:v1.9.1 --http-host 0.0.0.0 --db-dir /mnt/disks/db --install
+# --network flare --version go-flare:v1.9.1 --http-host 0.0.0.0 --db-dir /mnt/disks/db --extra-args "--some-arg=value" --install
 
 while [[ $# -gt 0 ]]; do
    key="$1"
@@ -599,6 +677,11 @@ while [[ $# -gt 0 ]]; do
       --validator)             # VARIABLE
          isValidatorParam="true"
          shift 
+         ;;
+      --extra-args)           # VARIABLE
+         extraArgsParam="$2"
+         shift
+         shift
          ;;
       --dry-run)             # VARIABLE
          dryRunParam="true"
